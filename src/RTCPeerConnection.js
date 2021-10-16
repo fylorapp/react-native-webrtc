@@ -1,7 +1,6 @@
 'use strict';
 
-import EventTarget from 'event-target-shim';
-import { NativeModules } from 'react-native';
+import { NativeEventEmitter, NativeModules } from 'react-native';
 
 import MediaStream from './MediaStream';
 import MediaStreamEvent from './MediaStreamEvent';
@@ -14,7 +13,6 @@ import RTCIceCandidate from './RTCIceCandidate';
 import RTCIceCandidateEvent from './RTCIceCandidateEvent';
 import RTCEvent from './RTCEvent';
 import * as RTCUtil from './RTCUtil';
-import EventEmitter from './EventEmitter';
 
 const { WebRTCModule } = NativeModules;
 
@@ -57,24 +55,24 @@ type RTCDataChannelInit = {
     id?: number;
 };
 
-const PEER_CONNECTION_EVENTS = [
-  'connectionstatechange',
-  'icecandidate',
-  'icecandidateerror',
-  'iceconnectionstatechange',
-  'icegatheringstatechange',
-  'negotiationneeded',
-  'signalingstatechange',
-  // Peer-to-peer Data API:
-  'datachannel',
-  // old:
-  'addstream',
-  'removestream',
-];
+// const PEER_CONNECTION_EVENTS = [
+//   'connectionstatechange',
+//   'icecandidate',
+//   'icecandidateerror',
+//   'iceconnectionstatechange',
+//   'icegatheringstatechange',
+//   'negotiationneeded',
+//   'signalingstatechange',
+//   // Peer-to-peer Data API:
+//   'datachannel',
+//   // old:
+//   'addstream',
+//   'removestream',
+// ];
 
 let nextPeerConnectionId = 0;
 
-export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENTS) {
+export default class RTCPeerConnection {
   localDescription: RTCSessionDescription;
   remoteDescription: RTCSessionDescription;
 
@@ -92,17 +90,19 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
   onsignalingstatechange: ?Function;
 
   onaddstream: ?Function;
+  ondatachannel: ?Function;
   onremovestream: ?Function;
 
   _peerConnectionId: number;
   _localStreams: Array<MediaStream> = [];
   _remoteStreams: Array<MediaStream> = [];
   _subscriptions: Array<any>;
+  _eventEmitter: NativeEventEmitter;
 
-  constructor(configuration) {
-    super();
+  constructor(configuration, eventEmitter) {
     this._peerConnectionId = nextPeerConnectionId++;
     WebRTCModule.peerConnectionInit(configuration, this._peerConnectionId);
+    this._eventEmitter = eventEmitter;
     this._registerEvents();
   }
 
@@ -207,7 +207,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
             Native bridge which is a bottleneck that tends to be visible in
             the UI when there is congestion involving UI-related passing.
 
-            TODO Implement the logic for filtering the stats based on 
+            TODO Implement the logic for filtering the stats based on
             the sender/receiver
             */
             return new Map(JSON.parse(data));
@@ -245,51 +245,61 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
 
   _registerEvents(): void {
     this._subscriptions = [
-      EventEmitter.addListener('peerConnectionOnRenegotiationNeeded', ev => {
+      this._eventEmitter.addListener('peerConnectionOnRenegotiationNeeded', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
-        this.dispatchEvent(new RTCEvent('negotiationneeded'));
+        if (typeof this.onnegotiationneeded === 'function') {
+          this.onnegotiationneeded(new RTCEvent('negotiationneeded'));
+        }
       }),
-      EventEmitter.addListener('peerConnectionIceConnectionChanged', ev => {
+      this._eventEmitter.addListener('peerConnectionIceConnectionChanged', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
         this.iceConnectionState = ev.iceConnectionState;
-        this.dispatchEvent(new RTCEvent('iceconnectionstatechange'));
+        if (typeof this.oniceconnectionstatechange === 'function') {
+          this.oniceconnectionstatechange(new RTCEvent('iceconnectionstatechange'));
+        }
         if (ev.iceConnectionState === 'closed') {
           // This PeerConnection is done, clean up event handlers.
           this._unregisterEvents();
         }
       }),
-      EventEmitter.addListener('peerConnectionStateChanged', ev => {
+      this._eventEmitter.addListener('peerConnectionStateChanged', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
         this.connectionState = ev.connectionState;
-        this.dispatchEvent(new RTCEvent('connectionstatechange'));
+        if (typeof this.onconnectionstatechange === 'function') {
+          this.onconnectionstatechange(new RTCEvent('connectionstatechange'));
+        }
         if (ev.connectionState === 'closed') {
           // This PeerConnection is done, clean up event handlers.
           this._unregisterEvents();
         }
       }),
-      EventEmitter.addListener('peerConnectionSignalingStateChanged', ev => {
+      this._eventEmitter.addListener('peerConnectionSignalingStateChanged', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
         this.signalingState = ev.signalingState;
-        this.dispatchEvent(new RTCEvent('signalingstatechange'));
+        if (typeof this.onsignalingstatechange === 'function') {
+          this.onsignalingstatechange(new RTCEvent('signalingstatechange'));
+        }
       }),
-      EventEmitter.addListener('peerConnectionAddedStream', ev => {
+      this._eventEmitter.addListener('peerConnectionAddedStream', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
         const stream = new MediaStream(ev);
         this._remoteStreams.push(stream);
         this.remoteDescription = new RTCSessionDescription(ev.sdp);
-        this.dispatchEvent(new MediaStreamEvent('addstream', {stream}));
+        if (typeof this.onaddstream === 'function') {
+          this.onaddstream(new MediaStreamEvent('addstream', {stream}));
+        }
       }),
-      EventEmitter.addListener('peerConnectionRemovedStream', ev => {
+      this._eventEmitter.addListener('peerConnectionRemovedStream', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
@@ -301,9 +311,11 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
           }
         }
         this.remoteDescription = new RTCSessionDescription(ev.sdp);
-        this.dispatchEvent(new MediaStreamEvent('removestream', {stream}));
+        if (typeof this.onremovestream === 'function') {
+          this.onremovestream(new MediaStreamEvent('removestream', {stream}));
+        }
       }),
-      EventEmitter.addListener('mediaStreamTrackMuteChanged', ev => {
+      this._eventEmitter.addListener('mediaStreamTrackMuteChanged', ev => {
         if (ev.peerConnectionId !== this._peerConnectionId) {
           return;
         }
@@ -311,19 +323,29 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
         if (track) {
           track.muted = ev.muted;
           const eventName = ev.muted ? 'mute' : 'unmute';
-          track.dispatchEvent(new MediaStreamTrackEvent(eventName, {track}));
+          if (ev.muted) {
+            if (typeof track.onmute === 'function') {
+              track.onmute(new MediaStreamTrackEvent(eventName, {track}));
+            }
+          } else {
+            if (typeof track.onunmute === 'function') {
+              track.onunmute(new MediaStreamTrackEvent(eventName, {track}));
+            }
+          }
         }
       }),
-      EventEmitter.addListener('peerConnectionGotICECandidate', ev => {
+      this._eventEmitter.addListener('peerConnectionGotICECandidate', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
         this.localDescription = new RTCSessionDescription(ev.sdp);
         const candidate = new RTCIceCandidate(ev.candidate);
         const event = new RTCIceCandidateEvent('icecandidate', {candidate});
-        this.dispatchEvent(event);
+        if (typeof this.onicecandidate === 'function') {
+          this.onicecandidate(event);
+        }
       }),
-      EventEmitter.addListener('peerConnectionIceGatheringChanged', ev => {
+      this._eventEmitter.addListener('peerConnectionIceGatheringChanged', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
@@ -331,17 +353,22 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
 
         if (this.iceGatheringState === 'complete') {
           this.localDescription = new RTCSessionDescription(ev.sdp);
-          this.dispatchEvent(new RTCIceCandidateEvent('icecandidate', null));
+          if (typeof this.onicecandidate === 'function') {
+            this.onicecandidate(new RTCIceCandidateEvent('icecandidate', null));
+          }
         }
-
-        this.dispatchEvent(new RTCEvent('icegatheringstatechange'));
+        if (typeof this.onicegatheringstatechange === 'function') {
+          this.onicegatheringstatechange(new RTCEvent('icegatheringstatechange'));
+        }
       }),
-      EventEmitter.addListener('peerConnectionDidOpenDataChannel', ev => {
+      this._eventEmitter.addListener('peerConnectionDidOpenDataChannel', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
         }
-        const channel = new RTCDataChannel(ev.dataChannel);
-        this.dispatchEvent(new RTCDataChannelEvent('datachannel', {channel}));
+        const channel = new RTCDataChannel(ev.dataChannel, this._eventEmitter);
+        if (typeof this.ondatachannel === 'function') {
+          this.ondatachannel(new RTCDataChannelEvent('datachannel', {channel}));
+        }
       })
     ];
   }
@@ -357,7 +384,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
    * values with which to initialize corresponding attributes of the new
    * instance such as id
    */
-  createDataChannel(label: string, dataChannelDict: ?RTCDataChannelInit) {
+  createDataChannel(label: string, dataChannelDict: ?RTCDataChannelInit, eventEmitter) {
     if (dataChannelDict && 'id' in dataChannelDict) {
       const id = dataChannelDict.id;
       if (typeof id !== 'number') {
@@ -374,6 +401,6 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
       throw new TypeError('Failed to create new DataChannel');
     }
 
-    return new RTCDataChannel(channelInfo);
+    return new RTCDataChannel(channelInfo, eventEmitter);
   }
 }

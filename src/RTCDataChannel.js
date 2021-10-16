@@ -1,11 +1,9 @@
 'use strict';
 
-import { NativeModules } from 'react-native';
+import { NativeEventEmitter, NativeModules } from 'react-native';
 import base64 from 'base64-js';
-import EventTarget from 'event-target-shim';
 import MessageEvent from './MessageEvent';
 import RTCDataChannelEvent from './RTCDataChannelEvent';
-import EventEmitter from './EventEmitter';
 
 const {WebRTCModule} = NativeModules;
 
@@ -15,19 +13,19 @@ type RTCDataChannelState =
   'closing' |
   'closed';
 
-const DATA_CHANNEL_EVENTS = [
-  'open',
-  'message',
-  'bufferedamountlow',
-  'closing',
-  'close',
-  'error',
-];
+// const DATA_CHANNEL_EVENTS = [
+//   'open',
+//   'message',
+//   'bufferedamountlow',
+//   'closing',
+//   'close',
+//   'error',
+// ];
 
-export default class RTCDataChannel extends EventTarget(DATA_CHANNEL_EVENTS) {
+export default class RTCDataChannel {
   _peerConnectionId: number;
   _reactTag: string;
-
+  _eventEmitter: NativeEventEmitter;
   _id: number;
   _label: string;
   _maxPacketLifeTime: ?number;
@@ -45,14 +43,12 @@ export default class RTCDataChannel extends EventTarget(DATA_CHANNEL_EVENTS) {
   onmessage: ?Function;
   onbufferedamountlow: ?Function;
   onerror: ?Function;
+  onclosing: ?Function;
   onclose: ?Function;
 
-  constructor(info) {
-    super();
-
+  constructor(info, eventEmitter) {
     this._peerConnectionId = info.peerConnectionId;
     this._reactTag = info.reactTag;
-
     this._label = info.label;
     this._id = info.id === -1 ? null : info.id; // null until negotiated.
     this._ordered = Boolean(info.ordered);
@@ -61,7 +57,7 @@ export default class RTCDataChannel extends EventTarget(DATA_CHANNEL_EVENTS) {
     this._protocol = info.protocol || '';
     this._negotiated = Boolean(info.negotiated);
     this._readyState = info.readyState;
-
+    this._eventEmitter = eventEmitter;
     this._registerEvents();
   }
 
@@ -97,21 +93,12 @@ export default class RTCDataChannel extends EventTarget(DATA_CHANNEL_EVENTS) {
     return this._readyState;
   }
 
-  send(data: string | ArrayBuffer | ArrayBufferView) {
+  send(data: string | ArrayBuffer) {
     if (typeof data === 'string') {
       WebRTCModule.dataChannelSend(this._peerConnectionId, this._reactTag, data, 'text');
       return;
     }
-
-    // Safely convert the buffer object to an Uint8Array for base64-encoding
-    if (ArrayBuffer.isView(data)) {
-      data = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-    } else if (data instanceof ArrayBuffer) {
-      data = new Uint8Array(data);
-    } else {
-      throw new TypeError('Data must be either string, ArrayBuffer, or ArrayBufferView');
-    }
-    WebRTCModule.dataChannelSend(this._peerConnectionId, this._reactTag, base64.fromByteArray(data), 'binary');
+    global.RNWebRTC.dataChannelSend(this._peerConnectionId, this._reactTag, data);
   }
 
   close() {
@@ -128,7 +115,7 @@ export default class RTCDataChannel extends EventTarget(DATA_CHANNEL_EVENTS) {
 
   _registerEvents() {
     this._subscriptions = [
-      EventEmitter.addListener('dataChannelStateChanged', ev => {
+      this._eventEmitter.addListener('dataChannelStateChanged', ev => {
         if (ev.reactTag !== this._reactTag) {
           return;
         }
@@ -137,16 +124,23 @@ export default class RTCDataChannel extends EventTarget(DATA_CHANNEL_EVENTS) {
           this._id = ev.id;
         }
         if (this._readyState === 'open') {
-          this.dispatchEvent(new RTCDataChannelEvent('open', {channel: this}));
+          this.onopen(new RTCDataChannelEvent('open', {channel: this}));
         } else if (this._readyState === 'closing') {
-          this.dispatchEvent(new RTCDataChannelEvent('closing', {channel: this}));
+          this.onclosing(new RTCDataChannelEvent('closing', {channel: this}));
         } else if (this._readyState === 'closed') {
-          this.dispatchEvent(new RTCDataChannelEvent('close', {channel: this}));
+          this.onclose(new RTCDataChannelEvent('close', {channel: this}));
           this._unregisterEvents();
           WebRTCModule.dataChannelDispose(this._peerConnectionId, this._reactTag);
         }
       }),
-      EventEmitter.addListener('dataChannelReceiveMessage', ev => {
+      this._eventEmitter.addListener('dataChannelReceiveRawMessage', ev => {
+        if (ev.reactTag !== this._reactTag) {
+          return;
+        }
+        const bytes = global.RNWebRTC.dataChannelReceive(ev.peerConnectionId, ev.reactTag);
+        this.onmessage(new MessageEvent('binary', {bytes}));
+      }),
+      this._eventEmitter.addListener('dataChannelReceiveMessage', ev => {
         if (ev.reactTag !== this._reactTag) {
           return;
         }
@@ -154,7 +148,7 @@ export default class RTCDataChannel extends EventTarget(DATA_CHANNEL_EVENTS) {
         if (ev.type === 'binary') {
           data = base64.toByteArray(ev.data).buffer;
         }
-        this.dispatchEvent(new MessageEvent('message', {data}));
+        this.onmessage(new MessageEvent(ev.type, {data}));
       }),
     ];
   }
