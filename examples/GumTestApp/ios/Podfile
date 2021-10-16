@@ -23,13 +23,12 @@ target 'GumTestApp' do
   #post_install do |installer|
   #  flipper_post_install(installer)
   #end
-end
-
-target 'GumTestApp-tvOS' do
-  # Pods for GumTestApp-tvOS
-
-  target 'GumTestApp-tvOSTests' do
-    inherit! :search_paths
-    # Pods for testing
+  post_install do |installer|
+    react_native_post_install(installer)
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings.delete 'IPHONEOS_DEPLOYMENT_TARGET'
+      end
+    end
   end
 end
