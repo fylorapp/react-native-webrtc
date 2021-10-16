@@ -14,11 +14,13 @@
     if (self) {
         _channel = channel;
         _reactTag = tag;
-        
+
         // Set ourselves as the deletagate.
         _channel.delegate = self;
     }
-    
+    _receivedBytes = nil;
+    _bufferSize = 0;
+    _useRawDataChannel = YES;
     return self;
 }
 

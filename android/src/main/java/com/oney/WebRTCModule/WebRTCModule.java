@@ -7,6 +7,7 @@ import android.util.SparseArray;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.JavaScriptContextHolder;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -69,6 +70,24 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         public void setLoggingSeverity(Logging.Severity severity) {
             this.loggingSeverity = severity;
         }
+    }
+
+    static {
+      try {
+        // Used to load the 'native-lib' library on application startup.
+        System.loadLibrary("cpp");
+      } catch (Exception ignored) {
+      }
+    }
+
+    private native void nativeInstall(long jsi);
+
+    public void installLib(JavaScriptContextHolder reactContext) {
+      if (reactContext.get() != 0) {
+        this.nativeInstall(reactContext.get());
+      } else {
+        Log.e("WebRTCModule", "JSI Runtime is not available in debug mode");
+      }
     }
 
     public WebRTCModule(ReactApplicationContext reactContext) {
@@ -399,7 +418,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
 
         try {
             ThreadUtils.submitToExecutor(() -> {
-                PeerConnectionObserver observer = new PeerConnectionObserver(this, id);
+                PeerConnectionObserver observer = new PeerConnectionObserver(this, id, true);
                 PeerConnection peerConnection = mFactory.createPeerConnection(rtcConfiguration, observer);
                 observer.setPeerConnection(peerConnection);
                 mPeerConnectionObservers.put(id, observer);
@@ -1009,6 +1028,19 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
             dataChannelSendAsync(peerConnectionId, reactTag, data, type));
     }
 
+    public byte[] dataChannelReceive(int peerConnectionId, String reactTag) {
+      PeerConnectionObserver pco = mPeerConnectionObservers.get(peerConnectionId);
+      if (pco == null || pco.getPeerConnection() == null) {
+        return null;
+      }
+      return pco.dataChannelReceive(reactTag);
+    }
+
+    public void dataChannelSend(int peerConnectionId, String reactTag, byte[] data) {
+        ThreadUtils.runOnExecutor(() ->
+          dataChannelSendAsync(peerConnectionId, reactTag, data));
+    }
+
     private void dataChannelSendAsync(int peerConnectionId,
                                       String reactTag,
                                       String data,
@@ -1020,7 +1052,17 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "dataChannelSend() peerConnection is null");
             return;
         }
-
         pco.dataChannelSend(reactTag, data, type);
+    }
+
+    private void dataChannelSendAsync(int peerConnectionId, String reactTag, byte[] data) {
+        // Forward to PeerConnectionObserver which deals with DataChannels
+        // because DataChannel is owned by PeerConnection.
+        PeerConnectionObserver pco = mPeerConnectionObservers.get(peerConnectionId);
+        if (pco == null || pco.getPeerConnection() == null) {
+          Log.d(TAG, "dataChannelSend() peerConnection is null");
+          return;
+        }
+        pco.dataChannelSend(reactTag, data);
     }
 }

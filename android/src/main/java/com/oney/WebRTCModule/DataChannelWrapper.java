@@ -16,6 +16,8 @@ class DataChannelWrapper implements DataChannel.Observer {
     private final DataChannel mDataChannel;
     private final int peerConnectionId;
     private final WebRTCModule webRTCModule;
+    private boolean useRawByteArray;
+    private byte[] receivedDataBuffer;
 
     DataChannelWrapper(
             WebRTCModule webRTCModule,
@@ -25,7 +27,18 @@ class DataChannelWrapper implements DataChannel.Observer {
         this.webRTCModule = webRTCModule;
         this.peerConnectionId = peerConnectionId;
         this.reactTag = reactTag;
+        this.receivedDataBuffer = null;
         mDataChannel = dataChannel;
+    }
+
+    DataChannelWrapper(
+      WebRTCModule webRTCModule,
+      int peerConnectionId,
+      String reactTag,
+      DataChannel dataChannel,
+      boolean useRawByteArray) {
+        this(webRTCModule, peerConnectionId, reactTag, dataChannel);
+        this.useRawByteArray = useRawByteArray;
     }
 
     public DataChannel getDataChannel() {
@@ -34,6 +47,14 @@ class DataChannelWrapper implements DataChannel.Observer {
 
     public String getReactTag() {
         return reactTag;
+    }
+
+    public byte[] getReceivedData() {
+      return receivedDataBuffer;
+    }
+
+    public void receiveData(byte[] data) {
+      receivedDataBuffer = data;
     }
 
     @Nullable
@@ -68,6 +89,12 @@ class DataChannelWrapper implements DataChannel.Observer {
         } else {
             bytes = new byte[buffer.data.remaining()];
             buffer.data.get(bytes);
+        }
+
+        if (useRawByteArray && buffer.binary) {
+          receiveData(bytes);
+          webRTCModule.sendEvent("dataChannelReceiveRawMessage", params);
+          return;
         }
 
         String type;

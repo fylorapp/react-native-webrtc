@@ -43,6 +43,7 @@ class PeerConnectionObserver implements PeerConnection.Observer {
     final Map<String, MediaStreamTrack> remoteTracks;
     private final VideoTrackAdapter videoTrackAdapters;
     private final WebRTCModule webRTCModule;
+    private boolean useRawDataChannel;
 
     PeerConnectionObserver(WebRTCModule webRTCModule, int id) {
         this.webRTCModule = webRTCModule;
@@ -52,6 +53,12 @@ class PeerConnectionObserver implements PeerConnection.Observer {
         this.remoteStreams = new HashMap<>();
         this.remoteTracks = new HashMap<>();
         this.videoTrackAdapters = new VideoTrackAdapter(webRTCModule, id);
+        this.useRawDataChannel = false;
+    }
+
+    PeerConnectionObserver(WebRTCModule webRTCModule, int id, boolean useRawDataChannel) {
+      this(webRTCModule, id);
+      this.useRawDataChannel = useRawDataChannel;
     }
 
     /**
@@ -165,7 +172,7 @@ class PeerConnectionObserver implements PeerConnection.Observer {
             return null;
         }
         final String reactTag  = UUID.randomUUID().toString();
-        DataChannelWrapper dcw = new DataChannelWrapper(webRTCModule, id, reactTag, dataChannel);
+        DataChannelWrapper dcw = new DataChannelWrapper(webRTCModule, id, reactTag, dataChannel, useRawDataChannel);
         dataChannels.put(reactTag, dcw);
         dataChannel.registerObserver(dcw);
 
@@ -222,9 +229,30 @@ class PeerConnectionObserver implements PeerConnection.Observer {
             Log.e(TAG, "Unsupported data type: " + type);
             return;
         }
+        dataChannelSend(dcw, byteArray, type);
+    }
+
+    void dataChannelSend(String reactTag, byte[] data) {
+        DataChannelWrapper dcw = dataChannels.get(reactTag);
+        if (dcw == null) {
+          Log.d(TAG, "dataChannelSend() dataChannel is null");
+          return;
+        }
+        dataChannelSend(dcw, data, "binary");
+    }
+
+    void dataChannelSend(DataChannelWrapper dcw, byte[] byteArray, String type) {
         ByteBuffer byteBuffer = ByteBuffer.wrap(byteArray);
         DataChannel.Buffer buffer = new DataChannel.Buffer(byteBuffer, type.equals("binary"));
         dcw.getDataChannel().send(buffer);
+    }
+
+    byte[] dataChannelReceive(String reactTag) {
+      DataChannelWrapper dcw = dataChannels.get(reactTag);
+      if (dcw != null) {
+        return dcw.getReceivedData();
+      }
+      return null;
     }
 
     void getStats(Promise promise) {
@@ -411,7 +439,7 @@ class PeerConnectionObserver implements PeerConnection.Observer {
     @Override
     public void onDataChannel(DataChannel dataChannel) {
         final String reactTag  = UUID.randomUUID().toString();
-        DataChannelWrapper dcw = new DataChannelWrapper(webRTCModule, id, reactTag, dataChannel);
+        DataChannelWrapper dcw = new DataChannelWrapper(webRTCModule, id, reactTag, dataChannel, useRawDataChannel);
         dataChannels.put(reactTag, dcw);
         dataChannel.registerObserver(dcw);
 

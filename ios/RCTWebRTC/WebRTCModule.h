@@ -31,12 +31,12 @@ static NSString *const kEventPeerConnectionGotICECandidate = @"peerConnectionGot
 static NSString *const kEventPeerConnectionDidOpenDataChannel = @"peerConnectionDidOpenDataChannel";
 static NSString *const kEventDataChannelStateChanged = @"dataChannelStateChanged";
 static NSString *const kEventDataChannelReceiveMessage = @"dataChannelReceiveMessage";
+static NSString *const kEventDataChannelReceiveRawMessage = @"dataChannelReceiveRawMessage";
 static NSString *const kEventMediaStreamTrackMuteChanged = @"mediaStreamTrackMuteChanged";
 
 @interface WebRTCModule : RCTEventEmitter <RCTBridgeModule>
 
 @property(nonatomic, strong) dispatch_queue_t workerQueue;
-
 @property (nonatomic, strong) RTCPeerConnectionFactory *peerConnectionFactory;
 
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, RTCPeerConnection *> *peerConnections;
@@ -47,5 +47,7 @@ static NSString *const kEventMediaStreamTrackMuteChanged = @"mediaStreamTrackMut
                         decoderFactory:(id<RTCVideoDecoderFactory>)decoderFactory;
 
 - (RTCMediaStream*)streamForReactTag:(NSString*)reactTag;
+- (void) dataChannelSend:(nonnull NSNumber *)peerConnectionId reactTag:(nonnull NSString *)tag data:(uint8_t*)data size:(size_t)size;
+- (size_t) dataChannelReceive:(nonnull NSNumber *)peerConnectionId reactTag:(nonnull NSString *)tag inBuffer:(uint8_t**)buffer;
 
 @end
