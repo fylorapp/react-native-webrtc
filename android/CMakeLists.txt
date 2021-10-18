@@ -15,7 +15,7 @@ include_directories(
 )
 
 set_target_properties(
-        cpp PROPERTIES
+        webrtc PROPERTIES
         CXX_STANDARD 17
         CXX_EXTENSIONS OFF
         POSITION_INDEPENDENT_CODE ON
