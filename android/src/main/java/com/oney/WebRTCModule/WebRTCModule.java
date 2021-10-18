@@ -75,7 +75,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     static {
       try {
         // Used to load the 'native-lib' library on application startup.
-        System.loadLibrary("cpp");
+        System.loadLibrary("webrtc");
       } catch (Exception ignored) {
       }
     }
