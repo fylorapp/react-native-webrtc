@@ -38,10 +38,15 @@ function onDataChannelCreated(channel, origin = 'neutral') {
 
   channel.onopen = function () {
     console.log('CHANNEL opened!!!');
-    const data1 = new Uint8Array([116, 101, 115, 116, 101]);
-    const data2 = new Uint8Array([116, 101, 115, 116, 100]);
-    channel.send(data1.buffer);
-    setTimeout(() => channel.send(data2.buffer), 2000);
+    while (true) {
+      const bufferedAmount = channel.bufferedAmount;
+      if (bufferedAmount === 0) {
+        const data1 = new Uint8Array(50000).fill(1);
+        channel.send(data1.buffer);
+      }
+      console.log('BUFFERED AMOUNT');
+      console.log(bufferedAmount);
+    }
   };
 
   channel.onclose = function () {
@@ -50,9 +55,7 @@ function onDataChannelCreated(channel, origin = 'neutral') {
 
   channel.onmessage = function (e) {
     console.log('MESSAGE RECEIVED BY ' + origin + ':');
-    console.log(
-      'time: ' + window.performance.now() + ' evt: ' + JSON.stringify(e),
-    );
+    console.log('time: ' + window.performance.now());
   };
 }
 
