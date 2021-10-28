@@ -239,9 +239,12 @@ template <TypedArrayKind T>
 void TypedArray<T>::update(jsi::Runtime &runtime, uint8_t *data) {
   jsi::ArrayBuffer buffer = getBuffer(runtime);
   size_t blockSize = buffer.size(runtime);
-  uint8_t *rawData = buffer.data(runtime) + byteOffset(runtime);
+  rawData = buffer.data(runtime) + byteOffset(runtime);
   std::copy(data, data + blockSize, rawData);
 }
+
+template <TypedArrayKind T>
+TypedArray<T>::~TypedArray () {}
 
 
 const jsi::PropNameID &PropNameIDCache::getConstructorNameProp(
