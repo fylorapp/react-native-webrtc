@@ -45,6 +45,8 @@ class DataChannelWrapper implements DataChannel.Observer {
         return mDataChannel;
     }
 
+    public long getBufferedAmount() { return mDataChannel.bufferedAmount(); }
+
     public String getReactTag() {
         return reactTag;
     }

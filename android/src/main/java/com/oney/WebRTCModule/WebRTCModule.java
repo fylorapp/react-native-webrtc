@@ -1041,6 +1041,11 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
           dataChannelSendAsync(peerConnectionId, reactTag, data));
     }
 
+    public long getDataChannelBufferedAmount(int peerConnectionId, String reactTag) {
+      PeerConnectionObserver pco = mPeerConnectionObservers.get(peerConnectionId);
+      return pco.getDataChannelBufferedAmount(reactTag);
+    }
+
     private void dataChannelSendAsync(int peerConnectionId,
                                       String reactTag,
                                       String data,

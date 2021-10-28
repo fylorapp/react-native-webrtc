@@ -139,11 +139,35 @@ void install(Runtime &jsiRuntime) {
                 ta->update(runtime, bytes);
                 jniEnv->DeleteLocalRef(jReactTag);
                 jniEnv->DeleteLocalRef(byteArray);
-                return Value(runtime, *ta);
-            });
+                Value output = Value(runtime, *ta);
+                delete ta;
+                return output;
+    });
+    auto getDataChannelBufferedAmount = Function::createFromHostFunction(
+            jsiRuntime, PropNameID::forAscii(jsiRuntime, "getDataChannelBufferedAmount"), 0,
+            [](Runtime &runtime, const Value &thisValue, const Value *arguments,
+               size_t count) -> Value {
+                JNIEnv *jniEnv = GetJniEnv();
+                java_class = jniEnv->GetObjectClass(java_object);
+                jint peerConnectionId = (jint) arguments[0].getNumber();
+                jstring jReactTag = string2jstring(jniEnv, arguments[1].getString(runtime).utf8(runtime));
+                jvalue args[2];
+                args[0].i = peerConnectionId;
+                args[1].l = jReactTag;
+                jmethodID getBufferedAmountMethod = jniEnv->GetMethodID(
+                        java_class,
+                        "getDataChannelBufferedAmount",
+                        "(ILjava/lang/String;)J"
+                );
+                long bufferedAmount = jniEnv->CallLongMethodA(java_object, getBufferedAmountMethod, args);
+                jniEnv->DeleteLocalRef(jReactTag);
+                Value output = Value(runtime, (int) bufferedAmount);
+                return output;
+    });
     Object *RNWebRTC = new Object(jsiRuntime);
     RNWebRTC->setProperty(jsiRuntime, "dataChannelSend", move(dataChannelSend));
     RNWebRTC->setProperty(jsiRuntime, "dataChannelReceive", move(dataChannelReceive));
+    RNWebRTC->setProperty(jsiRuntime, "getDataChannelBufferedAmount", move(getDataChannelBufferedAmount));
     jsiRuntime.global().setProperty(jsiRuntime, "RNWebRTC", *RNWebRTC);
 }
 

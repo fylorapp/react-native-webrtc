@@ -255,6 +255,11 @@ class PeerConnectionObserver implements PeerConnection.Observer {
       return null;
     }
 
+    long getDataChannelBufferedAmount(String reactTag) {
+      DataChannelWrapper dcw = dataChannels.get(reactTag);
+      return dcw.getBufferedAmount();
+    }
+
     void getStats(Promise promise) {
         peerConnection.getStats(rtcStatsReport -> {
             promise.resolve(StringUtils.statsToJSON(rtcStatsReport));
