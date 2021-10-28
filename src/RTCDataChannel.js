@@ -36,8 +36,6 @@ export default class RTCDataChannel {
   _readyState: RTCDataChannelState;
 
   binaryType: 'arraybuffer' = 'arraybuffer'; // we only support 'arraybuffer'
-  bufferedAmount: number = 0;
-  bufferedAmountLowThreshold: number = 0;
 
   onopen: ?Function;
   onmessage: ?Function;
@@ -91,6 +89,11 @@ export default class RTCDataChannel {
 
   get readyState(): string {
     return this._readyState;
+  }
+
+  get bufferedAmount(): number {
+    const bufferedAmount = global.RNWebRTC.getDataChannelBufferedAmount(this._peerConnectionId, this._reactTag);
+    return bufferedAmount;
   }
 
   send(data: string | ArrayBuffer) {
