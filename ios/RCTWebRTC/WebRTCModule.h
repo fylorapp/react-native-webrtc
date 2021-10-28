@@ -49,5 +49,6 @@ static NSString *const kEventMediaStreamTrackMuteChanged = @"mediaStreamTrackMut
 - (RTCMediaStream*)streamForReactTag:(NSString*)reactTag;
 - (void) dataChannelSend:(nonnull NSNumber *)peerConnectionId reactTag:(nonnull NSString *)tag data:(uint8_t*)data size:(size_t)size;
 - (size_t) dataChannelReceive:(nonnull NSNumber *)peerConnectionId reactTag:(nonnull NSString *)tag inBuffer:(uint8_t**)buffer;
+- (long) dataChannelGetBufferedAmount:(nonnull NSNumber*)pcId forReactTag:(nonnull NSString *)tag;
 
 @end

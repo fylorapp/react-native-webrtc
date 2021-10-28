@@ -158,32 +158,52 @@ static void install(Runtime &jsiRuntime, WebRTCModule *webRTCModule) {
             jsiRuntime, PropNameID::forAscii(jsiRuntime, "dataChannelSend"), 0,
             [webRTCModule](Runtime &runtime, const Value &thisValue, const Value *arguments,
                size_t count) -> Value {
-                   NSNumber *peerConnectionId = [NSNumber numberWithInt:(int) arguments[0].getNumber()];
-                   NSString *reactTag = convertJSIStringToNSString(runtime, arguments[1].getString(runtime));
-                   ArrayBuffer arrayBuffer = arguments[2].getObject(runtime).getArrayBuffer(runtime);
-                   size_t bufferSize = arrayBuffer.size(runtime);
-                   uint8_t *bytes = arrayBuffer.data(runtime);
-                   [webRTCModule dataChannelSend:peerConnectionId reactTag:reactTag data:bytes size:bufferSize];
-                   return Value(runtime, true);
+                   @autoreleasepool {
+                       NSNumber *peerConnectionId = [NSNumber numberWithInt:(int) arguments[0].getNumber()];
+                       NSString *reactTag = convertJSIStringToNSString(runtime, arguments[1].getString(runtime));
+                       ArrayBuffer arrayBuffer = arguments[2].getObject(runtime).getArrayBuffer(runtime);
+                       size_t bufferSize = arrayBuffer.size(runtime);
+                       uint8_t *bytes = arrayBuffer.data(runtime);
+                       [webRTCModule dataChannelSend:peerConnectionId reactTag:reactTag data:bytes size:bufferSize];
+                       return Value(runtime, true);
+                   }
     });
     auto dataChannelReceive = Function::createFromHostFunction(
             jsiRuntime, PropNameID::forAscii(jsiRuntime, "dataChannelSend"), 0,
             [webRTCModule](Runtime &runtime, const Value &thisValue, const Value *arguments,
                size_t count) -> Value {
-                   NSNumber *peerConnectionId = [NSNumber numberWithInt:(int) arguments[0].getNumber()];
-                   NSString *reactTag = convertJSIStringToNSString(runtime, arguments[1].getString(runtime));
-                   uint8_t* bytes = nil;
-                   size_t bufferSize = [webRTCModule dataChannelReceive:peerConnectionId reactTag:reactTag inBuffer:&bytes];
-                   if (bufferSize == 0) {
-                       return Value(runtime, false);
+                   @autoreleasepool {
+                       NSNumber *peerConnectionId = [NSNumber numberWithInt:(int) arguments[0].getNumber()];
+                       NSString *reactTag = convertJSIStringToNSString(runtime, arguments[1].getString(runtime));
+                       uint8_t* bytes = nil;
+                       size_t bufferSize = [webRTCModule dataChannelReceive:peerConnectionId reactTag:reactTag inBuffer:&bytes];
+                       if (bufferSize == 0) {
+                           return Value(runtime, false);
+                       }
+                       TypedArray<TypedArrayKind::Uint8Array> *ta = new TypedArray<TypedArrayKind::Uint8Array>(runtime, bufferSize);
+                       ta->update(runtime, bytes);
+                       Value output = Value(runtime, *ta);
+                       delete ta;
+                       return output;
                    }
-                   TypedArray<TypedArrayKind::Uint8Array> *ta = new TypedArray<TypedArrayKind::Uint8Array>(runtime, bufferSize);
-                   ta->update(runtime, bytes);
-                   return Value(runtime, *ta);
+    });
+    auto getDataChannelBufferedAmount = Function::createFromHostFunction(
+            jsiRuntime, PropNameID::forAscii(jsiRuntime, "getDataChannelBufferedAmount"), 0,
+            [webRTCModule](Runtime &runtime, const Value &thisValue, const Value *arguments,
+               size_t count) -> Value {
+                   @autoreleasepool {
+                       NSNumber *peerConnectionId = [NSNumber numberWithInt:(int) arguments[0].getNumber()];
+                       NSString *reactTag = convertJSIStringToNSString(runtime, arguments[1].getString(runtime));
+                       long bufferedAmount = [webRTCModule dataChannelGetBufferedAmount:peerConnectionId forReactTag:reactTag];
+                       NSNumber *ba = [NSNumber numberWithLong:bufferedAmount];
+                       Value jsiAmount = convertNSNumberToJSINumber(runtime, ba);
+                       return jsiAmount;
+                   }
     });
     Object *RNWebRTC = new Object(jsiRuntime);
     RNWebRTC->setProperty(jsiRuntime, "dataChannelSend", move(dataChannelSend));
     RNWebRTC->setProperty(jsiRuntime, "dataChannelReceive", move(dataChannelReceive));
+    RNWebRTC->setProperty(jsiRuntime, "getDataChannelBufferedAmount", move(getDataChannelBufferedAmount));
     jsiRuntime.global().setProperty(jsiRuntime, "RNWebRTC", *RNWebRTC);
 }
 

@@ -110,15 +110,17 @@ void arrayBufferUpdate(jsi::Runtime &runtime, jsi::ArrayBuffer &buffer,
 template <TypedArrayKind T>
 class TypedArray : public TypedArrayBase {
  public:
+
   TypedArray(jsi::Runtime &runtime, size_t size);
   TypedArray(jsi::Runtime &runtime, std::vector<ContentType<T>> data);
   TypedArray(TypedArrayBase &&base);
   TypedArray(TypedArray &&) = default;
   TypedArray &operator=(TypedArray &&) = default;
-
+  uint8_t *rawData;
   std::vector<ContentType<T>> toVector(jsi::Runtime &runtime);
   void update(jsi::Runtime &runtime, const std::vector<ContentType<T>> &data);
   void update(jsi::Runtime &runtime, uint8_t *data);
+  ~TypedArray();
 };
 
 template <TypedArrayKind T>

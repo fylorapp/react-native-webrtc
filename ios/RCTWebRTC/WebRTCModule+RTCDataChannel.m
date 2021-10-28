@@ -37,6 +37,7 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(createDataChannel:(nonnull NSNumber *)pee
             return;
         }
 
+
         NSString *reactTag = [[NSUUID UUID] UUIDString];
         DataChannelWrapper *dcw = [[DataChannelWrapper alloc] initWithChannel:dataChannel reactTag:reactTag];
         dcw.pcId = peerConnectionId;
@@ -51,6 +52,7 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(createDataChannel:(nonnull NSNumber *)pee
             @"ordered": @(dataChannel.isOrdered),
             @"maxPacketLifeTime": @(dataChannel.maxPacketLifeTime),
             @"maxRetransmits": @(dataChannel.maxRetransmits),
+            @"bufferedAmount": @(dataChannel.bufferedAmount),
             @"protocol": dataChannel.protocol,
             @"negotiated": @(dataChannel.isNegotiated),
             @"readyState": [self stringForDataChannelState:dataChannel.readyState]
@@ -120,6 +122,12 @@ RCT_EXPORT_METHOD(dataChannelSend:(nonnull NSNumber *)peerConnectionId
     return dcw.bufferSize;
 }
 
+- (long) dataChannelGetBufferedAmount:(nonnull NSNumber*)pcId forReactTag:(nonnull NSString *)tag {
+    RTCPeerConnection *peerConnection = self.peerConnections[pcId];
+    DataChannelWrapper *dcw = peerConnection.dataChannels[tag];
+    return dcw.channel.bufferedAmount;
+}
+
 - (NSString *)stringForDataChannelState:(RTCDataChannelState)state
 {
   switch (state) {
@@ -148,16 +156,18 @@ RCT_EXPORT_METHOD(dataChannelSend:(nonnull NSNumber *)peerConnectionId
 - (void)dataChannel:(DataChannelWrapper *)dcw didReceiveMessageWithBuffer:(RTCDataBuffer *)buffer
 {
     if (buffer.isBinary && dcw.useRawDataChannel) {
-        size_t bufferSize = [[buffer data] length];
-        dcw.bufferSize = bufferSize;
-        if (dcw.receivedBytes != nil) {
-            free(dcw.receivedBytes);
+        @autoreleasepool {
+            size_t bufferSize = [[buffer data] length];
+            dcw.bufferSize = bufferSize;
+            if (dcw.receivedBytes != nil) {
+                free(dcw.receivedBytes);
+            }
+            dcw.receivedBytes = malloc(bufferSize);
+            [[buffer data] getBytes:dcw.receivedBytes length:bufferSize];
+            NSDictionary *event = @{@"reactTag": dcw.reactTag, @"peerConnectionId": dcw.pcId, @"type": @"binary"};
+            [self sendEventWithName:kEventDataChannelReceiveRawMessage body:event];
+            return;
         }
-        dcw.receivedBytes = malloc(bufferSize);
-        [[buffer data] getBytes:dcw.receivedBytes length:bufferSize];
-        NSDictionary *event = @{@"reactTag": dcw.reactTag, @"peerConnectionId": dcw.pcId, @"type": @"binary"};
-        [self sendEventWithName:kEventDataChannelReceiveRawMessage body:event];
-        return;
     }
     NSString *type;
     NSString *data;
